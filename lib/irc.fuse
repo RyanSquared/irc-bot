@@ -1,0 +1,191 @@
+using *;
+local socket = require("cqueues.socket");
+local {Error} = require("stdlib.error");
+
+local gen_index = (\x -> return setmetatable({}, {__index = x}););
+local clean_table = \table-> {
+	for (k, v in pairs(table))
+		table[k] = nil;
+};
+
+local class ConfigurationError implements BaseError {
+	__init(value, reason)=>
+		@value, @reason = value, reason;
+	__tostring()=>
+		return ("%s(%q, reason=%q)"):format(@__class, @value, @reason);
+}
+
+local IRCClient = nil;
+class IRCClient {
+	handlers = {};
+	senders = {};
+	hooks = {};
+	commands = {};
+
+	default_config = {
+		prefix = "!"
+	};
+
+	__init(server, port=6697, config=@default_config)=> {
+		assert(server, "No server given");
+		@config = {
+			host = server,
+			port = port,
+			ssl = (== port 6697)
+		};
+		for (k, v in pairs(config))
+			@config[k] = v;
+
+		@server = {};
+		@channels = {};
+		@users = {};
+	}
+
+	add_command(name, command)=>
+		@commands[name] = command;
+
+	add_hook(id, hook)=>
+		if (! @hooks[id])
+			@hooks[id] = {};
+		else
+			table.insert(@hooks[id], hook);
+
+	add_handler(id, handler)=>
+		if (! @handlers[id])
+			@handlers[id] = {handler};
+		else
+			table.insert(@handlers[id], handler);
+
+	add_sender(id, sender)=> {
+		assert((! @senders[id]), (.. "Sender already exists: " id));
+		@senders[id] = sender;
+	}
+
+	load_modules(modules)=> {
+		if modules.commands
+			for (id, command in pairs(modules.commands))
+				@add_command(id, command);
+		if modules.hooks
+			for (id, hook in pairs(modules.hooks))
+				@add_hook(id, hook);
+		if modules.handlers
+			for (id, handler in pairs(modules.handlers))
+				@add_handler(id, handler);
+		if modules.senders
+			for (id, sender in pairs(modules.senders))
+				@add_sender(id, sender);
+	}
+	
+	clear_modules()=> {
+		for (_, t in pairs({@commands, @handlers, @hooks, @senders}))
+			clean_table(t);
+	}
+
+	connect()=> {
+		if @socket
+			@socket:shutdown();
+		
+		local {host, port, ssl} = @config;
+		if (! @config.nick)
+			@config.nick = "Bot";
+		if (! @config.username)
+			@config.username = "FuseBot";
+		if (! @config.realname)
+			@config.realname =
+				"FusionScript IRC Bot: https://github.com/RyanSquared/bot";
+
+		print(host, port);
+		@socket = assert(socket.connect(host, port));
+		if ssl {
+			@socket:starttls();
+			@socket:flush();
+		}
+		@fire_hook('CONNECT');
+		local {nick, username, realname, password} = @config;
+		@send_raw('NICK %s', nick);
+		if (&& pass ssl)
+			@send_raw('PASS :%s', pass);
+		elseif pass
+			error(ConfigurationError("ssl", "Must use TLS with passwords"));
+		@send_raw('USER %s * * :%s', username, realname);
+	}
+
+	disconnect()=> {
+		@send_raw('QUIT');
+		if @socket
+			@socket:shutdown();
+		@fire_hook('DISCONNECT');
+	}
+
+	send_raw(pattern, ...)=>
+		@socket:write((.. pattern:format(...) "\n"));
+
+	date_pattern = "(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+).(%d+)Z";
+	parse_time(date)=> {
+		year, month, day, hour, min, sec = date:match(@date_pattern);
+		return {
+			year = year, month = month, day = day,
+			hour = hour, min = min, sec = sec
+		};
+	}
+
+	line_parser = re.compile([[
+		line <- {| (tags sp)? (prefix sp)? (command / numeric) (sp arg)* |}
+
+		tags <- {:tags: '@' tag (';' tag)* :}
+		tag <- {| {:vendor: {[^/]+} '/' :}? {:key: ('=' [^; ]+)? ->
+			esc_tag :} |}
+
+		prefix <- [^ ]+
+
+		command <- [A-Za-z]+
+		numeric <- %d^+3^-4 -- at most four digits, at least three
+
+		arg <- ':' .+ / %S+
+
+		sp <- %s
+	]], {esc_tag = (\tag -> return tag:sub('\\(.)', setmetatable({
+		[':'] = ';',
+		['s'] = ' ',
+		['\\'] = '\\',
+		['r'] = '\r',
+		['n'] = '\n'
+	}, {__index = \t, k -> k}));)}); -- __index required by spec
+
+	fire_hook(name)=> {
+		if (! @hooks[name])
+			return;
+		local has_errors = false;
+		local errors = {};
+		if @hooks[name]
+			for (_, hook in pairs(@hooks[name])) {
+				ok, err = pcall(hook, @);
+				if (! ok) {
+					has_errors = true;
+					table.append(errors, err);
+				}
+			}
+	}
+	
+	process(line)=> {
+		local data = @line_parser:match(line);
+		local has_errors = false;
+		local errors = {};
+		if @handlers[command]
+			for (_, handler in pairs(@handlers[command])) {
+				local ok, err = pcall(handler, @, data);
+				if (! ok) {
+					has_errors = true;
+					table.append(errors, err);
+				}
+			}
+	}
+
+	loop()=> {
+		for (received_line in @socket:lines()) {
+			pcall(@process, @, received_line);
+		}
+	}
+}
+
+return {ConfigurationError = ConfigurationError, IRCClient = IRCClient};
