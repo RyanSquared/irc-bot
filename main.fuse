@@ -1,0 +1,76 @@
+using *;
+local cqueues = require("cqueues");
+local {BaseError, Error} = require("stdlib.error");
+local {IRCClient} = require("lib.irc");
+local lfs = require("lfs");
+
+local wd = lfs.currentdir();
+
+async lfs.full_dir(folder)-> {
+	for (path in lfs.dir(folder))
+		yield ("%s/%s"):format(folder, path);
+}
+
+local load_modules(folder)->
+	for (file in lfs.full_dir(folder))
+		if file:match("%.fuse")
+			dofile(file);
+
+local reload(clean = true)-> {
+	if clean
+		IRCClient:clear_modules();
+	load_modules("plugins");
+}
+
+reload();
+
+local bots = {};
+local conf_home = (|| os.getenv('XDG_CONFIG_HOME')
+		(.. os.getenv('HOME') '/.config'));
+
+for (file in lfs.full_dir((.. conf_home "/irc-bot")))
+	if file:match("%.lua$") {
+		local data = nil;
+		(loadfile(file, nil, {
+			bot = (\name ->
+				(\file_data-> {
+					file_data.name = name;
+					file_data.file = file;
+					data = file_data;
+				}))
+		}))();
+		table.insert(bots, IRCClient(data.server, data.port, data));
+	}
+
+local queue = cqueues.new();
+package.loaded.queue = queue;
+
+EMAXTRIES = 1;
+local class ConnectionError extends Error implements BaseError {
+	[EMAXTRIES] = "Max tries exceeded";
+	__init(err)=> {
+		assert(err);
+		@error = @[err];
+	}
+	__tostring()=> return ("%s(reason=%q)"):format(@__class, @error);
+}
+
+for (_, bot in pairs(bots))
+	queue:wrap(\-> {
+		while true {
+			local success = nil;
+			for (i=1, 3) {
+				local ok, err = pcall(bot.connect, bot);
+				success = ok;
+				if ok
+					break;
+			}
+			if (! success) {
+				error(ConnectionError(EMAXTRIES));
+				return;
+			}
+			bot:loop();
+		}
+	});
+
+assert(queue:loop());
