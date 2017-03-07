@@ -1,0 +1,68 @@
+using *;
+local {sleep} = require("cqueues");
+local {IRCClient} = require("lib.irc");
+
+-- [==] Enough to keep the bot *alive* [==]
+
+-- Set up server information on connect
+IRCClient:add_hook('CONNECT', \=> {
+	@channels = {};
+	@users = {};
+	@server = {
+		isupport_caps = {},
+		ircv3_caps = {},
+		batches = {}
+	};
+});
+
+-- Autojoin channels on connect to server
+IRCClient:add_handler('001', \=>
+	if @config.autojoin
+		for (_, channel in @config.autojoin) {
+			@send_raw("JOIN %s", channel);
+			sleep(0.5); -- to avoid disconnect by flooding
+		}
+);
+
+-- Respond to PING requests to stay alive when idle
+IRCClient:add_handler('PING', \line=>
+	@send_raw("PONG :%s", line[(# line)]);
+);
+
+-- Reconnect when killed by server
+IRCClient:add_handler('ERROR', \=> {
+	cqueues.sleep(math.max(0, (- os.time() (+ @data.last_connect 30))));
+	@connect();
+});
+
+-- Change nick when nick is not available
+IRCClient:add_handler('433', \line=> {
+	if (! @data.nick_test)
+		@data.nick_test = 0;
+	@data.nick_test = (+ @data.nick_test 1);
+	if (> @data.nick_test 30)
+		@disconnect();
+	else
+		@send_raw("NICK %s[%d]", @config.nick, @data.nick_test);
+});
+
+-- [==] Capability negotiation [==]
+
+-- TODO
+
+-- [==] Data Collection [==]
+
+local cap_parser = re.compile([[{|
+	{:is_deleting: {'-'} :}?
+	{:key: {[^ =]+} :} {:value: '=' {.+} :}?
+|}]]);
+
+IRCClient:add_handler('005', \line=> {
+	for (i=3, (- (#line) 1)) {
+		cap = cap_parser:match(line[i]);
+		if cap.is_deleting
+			@server.isupport_caps[cap.key] = nil;
+		else
+			@server.isupport_caps[cap.key] = (|| cap.value true);
+	}
+});
