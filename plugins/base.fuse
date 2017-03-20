@@ -18,7 +18,7 @@ IRCClient:add_hook('CONNECT', \=> {
 -- Autojoin channels on connect to server
 IRCClient:add_handler('001', \=>
 	if @config.autojoin
-		for (_, channel in @config.autojoin) {
+		for (_, channel in pairs(@config.autojoin)) {
 			@send_raw("JOIN %s", channel);
 			sleep(0.5); -- to avoid disconnect by flooding
 		}
@@ -52,17 +52,168 @@ IRCClient:add_handler('433', \line=> {
 
 -- [==] Data Collection [==]
 
+local prefix_pattern = re.compile([[ {|
+		{:nick: {[^!]+} :} '!'
+		{:user: {[^@]+} :} '@'
+		{:host: {.+} :} /
+		{:server: {.+} :}
+|}]]);
+
 local cap_parser = re.compile([[{|
 	{:is_deleting: {'-'} :}?
 	{:key: {[^ =]+} :} {:value: '=' {.+} :}?
 |}]]);
 
 IRCClient:add_handler('005', \line=> {
-	for (i=3, (- (#line) 1)) {
-		cap = cap_parser:match(line[i]);
+	for (i=2, (- (#line) 1)) {
+		local cap = cap_parser:match(line[i]);
 		if cap.is_deleting
 			@server.isupport_caps[cap.key] = nil;
 		else
 			@server.isupport_caps[cap.key] = (|| cap.value true);
 	}
+});
+
+IRCClient:add_handler('AWAY', \line=> {
+	local {nick} = prefix_pattern:match(line.prefix);
+	@users[nick].away = line.prefix[(#line.prefix)];
+});
+
+IRCClient:add_handler('ACCOUNT', \line=> {
+	local {nick} = prefix_pattern:match(line.prefix);
+	@users[nick].account = (?: (!= args[1] "*") args[1] nil);
+});
+
+IRCClient:add_handler('JOIN', \line=> {
+	local (channel, account, realname);
+	channel = line[(#line)];
+	if @server.ircv3_caps['extended-join'] {
+		if (!= line[2] '*') -- TODO: store realname
+		channel, account, realname = unpack(line);
+	} elseif (&& @server.ircv3_caps['account-tag'] line.tags.account)
+		account = line.tags.account;
+	local {nick, user, host} = prefix_pattern:match(line.prefix);
+	if nick
+		if (! @users[nick])
+			@users[nick] = {
+				account = account,
+				channels = {
+					[channel] = {
+						status = ""
+					}
+				},
+				username = username,
+				host = host
+			};
+		else {
+			if (! @users[nick].channels) -- TODO: re MONTIOR
+				@users[nick].channels = {};
+			@users[nick].channels[channel] = {status = ""};
+		}
+	if realname
+		@users[nick].realname = realname;
+	if (! @channels[channel]) {
+		if @server.ircv3_caps['userhost-in-names']
+			@send_raw("NAMES %s", channel);
+		else
+			@send_raw("WHO %s", chnanel);
+		@channels[channel] = {
+			users = {
+				[nick] = @users[nick]
+			}
+		};
+	} else
+		@channels[channel].users[nick] = @users[nick];
+});
+
+IRCClient:add_handler('NICK', \line=> {
+	local {nick, server} = prefix_pattern:match(line.prefix);
+	local old = (|| nick server);
+	local new = line[(#line)];
+	for (channel_name in pairs(@users[old].channels)) {
+		@channels[channel_name].users[new] = @users[old];
+		@channels[channel_name].users[old] = nil;
+	}
+	@users[new] = @users[old];
+	@users[old] = nil;
+});
+
+IRCClient:add_handler('MODE', \line=>
+	if (&& line[1] line[1]:match("^#")) -- TODO: optimize for status only
+		@send_raw("NAMES %s", line[1]);
+);
+
+IRCClient:add_handler('353', \line=> {
+	local channel = line[3];
+	local statuses = table.concat("[", ((?: @server.caps.PREFIX
+		server.caps.PREFIX:match("%(.-%)(.+)") "+@")):gsub("%p",
+		"%%%1"), "]");
+	for (text in line[(#line)]:gmatch("%S+")) {
+		local (status, pre, nick, user, host);
+		if text:match(statuses)
+			status, pre = text:match(("^(%s+)(.+)"):format(statuses));
+		else
+			status, pre = '', text;
+		if @server.ircv3_caps['userhost-in-names'] {
+			local match = prefix_pattern:match(pre);
+			nick, user, host = match.nick, match.user, match.host;
+		} else
+			nick = pre;
+
+		if (! @users[nick])
+			@users[nick] = {channels = {}};
+		if user
+			@users[nick].user = user;
+		if host
+			@users[nick].host = host;
+
+		if @channels[channel].users[nick]
+			if @users[nick].channels[channel]
+				@users[nick].channels[channel].status = status;
+			else
+				@users[nick].channels[channel] = {status = status};
+		else
+			@channels[channel].users[nick] = @users[nick];
+			@users[nick].channels[channel] = {status = status};
+
+	}
+});
+
+IRCClient:add_handler('352', \line=> {
+	local _, user, host, _, nick, away = unpack(line);
+	local _user = @users[nick];
+	if (! _user) {
+		@users[nick] = {channels = {}};
+		_user = @users[nick];
+	}
+	_user.user = user;
+	_user.host = host;
+	_user.away = (== away:sub(1, 1) "G");
+});
+
+IRCClient:add_handler('CHGHOST', \line=> {
+	local {nick} = prefix_pattern:match(line.prefix);
+	@users[nick].user, @users[nick].host = unpack(line);
+});
+
+IRCClient:add_handler('KICK', \line=> {
+	local channel, nick = unpack(line);
+	@users[nick].channels[channel] = nil;
+	if (== (# @users[nick].channels) 0)
+		@users[nick] = nil; -- TODO: look at again when MONITOR
+});
+
+IRCClient:add_handler('PART', \line=> {
+	local channel = line[1];
+	local nick = prefix_pattern:match(line.prefix);
+	@users[nick].channels[channel] = nil;
+	if (== (# @users[nick].channels) 0)
+		@users[nick] = nil; -- TODO: look at again when MONITOR
+});
+
+IRCClient:add_handler('QUIT', \line=> {
+	local nick = prefix_pattern:match(line.prefix);
+	for (channel in pairs(@users[nick].channels))
+		@channels[channel].users[nick] = nil;
+	@users[nick] = nil;
 });
