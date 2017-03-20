@@ -108,9 +108,9 @@ local class IRCClient {
 		@fire_hook('CONNECT');
 		local {nick, username, realname, password} = @config;
 		@send_raw('NICK %s', nick);
-		if (&& pass ssl)
-			@send_raw('PASS :%s', pass);
-		elseif pass
+		if (&& password ssl)
+			@send_raw('PASS :%s', password);
+		elseif password
 			error(ConfigurationError("ssl", "Must use TLS with passwords"));
 		@send_raw('USER %s * * :%s', username, realname);
 	}
@@ -178,7 +178,7 @@ local class IRCClient {
 	process(line)=> {
 		local data = @line_parser:match(line);
 		local errors = {};
-		local command = data[1];
+		local command = table.remove(data, 1);
 		if @handlers[command]
 			for (_, handler in pairs(@handlers[command])) {
 				local ok, err = pcall(handler, self, data);
