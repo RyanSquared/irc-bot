@@ -88,7 +88,7 @@ IRCClient:add_handler('JOIN', \line=> {
 	local (channel, account, realname);
 	channel = line[(#line)];
 	if @server.ircv3_caps['extended-join'] {
-		if (!= line[2] '*') -- TODO: store realname
+		if (!= line[2] '*')
 		channel, account, realname = unpack(line);
 	} elseif (&& @server.ircv3_caps['account-tag'] line.tags.account)
 		account = line.tags.account;
@@ -116,7 +116,7 @@ IRCClient:add_handler('JOIN', \line=> {
 		if @server.ircv3_caps['userhost-in-names']
 			@send_raw("NAMES %s", channel);
 		else
-			@send_raw("WHO %s", chnanel);
+			@send_raw("WHO %s", channel);
 		@channels[channel] = {
 			users = {
 				[nick] = @users[nick]
@@ -139,15 +139,29 @@ IRCClient:add_handler('NICK', \line=> {
 });
 
 IRCClient:add_handler('MODE', \line=>
-	if (&& line[1] line[1]:match("^#")) -- TODO: optimize for status only
+	if (@server.isupport_caps['PREFIX']) {
+		local modes = table.concat({"[", ((?: @server.isupport_caps.PREFIX
+			@server.isupport_caps.PREFIX:match("(%(.-%))") "+@")):gsub("%p",
+			"%%%1"), "]"});
+		if (line[2]:match(modes))
+			@send_raw("NAMES %s", line[1]);
+	} elseif (&& line[1] line[1]:match("^#"))
 		@send_raw("NAMES %s", line[1]);
+);
+
+IRCClient:add_handler('332', \line=>
+	@channels[line[2]].topic = line[3];
+);
+
+IRCClient:add_handler('TOPIC', \line=>
+	@channels[line[1]].topic = line[2];
 );
 
 IRCClient:add_handler('353', \line=> {
 	local channel = line[3];
-	local statuses = table.concat("[", ((?: @server.caps.PREFIX
-		server.caps.PREFIX:match("%(.-%)(.+)") "+@")):gsub("%p",
-		"%%%1"), "]");
+	local statuses = table.concat({"[", ((?: @server.isupport_caps.PREFIX
+		@server.isupport_caps.PREFIX:match("%(.-%)(.+)") "+@")):gsub("%p",
+		"%%%1"), "]"});
 	for (text in line[(#line)]:gmatch("%S+")) {
 		local (status, pre, nick, user, host);
 		if text:match(statuses)
