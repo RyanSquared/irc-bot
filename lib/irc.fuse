@@ -169,7 +169,7 @@ local class IRCClient {
 			for (_, hook in pairs(@hooks[name])) {
 				local ok, err = pcall(hook, @);
 				if (! ok)
-					table.append(errors, err);
+					table.insert(errors, err);
 			}
 		for (k, v in pairs(errors))
 			print(v);
