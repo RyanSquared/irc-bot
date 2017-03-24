@@ -196,6 +196,47 @@ local class IRCClient {
 			pcall(@process, @, received_line);
 		}
 	}
+
+	colors = {
+		[0] =  15, -- white
+		[1] =  0,  -- black
+		[2] =  4,  -- blue
+		[3] =  2,  -- green
+		[4] =  1,  -- red
+		[5] =  3,  -- brown
+		[6] =  5,  -- purple
+		[7] =  3,  -- orange
+		[8] =  11, -- yellow
+		[9] =  10, -- light green
+		[10] = 6,  -- teal
+		[11] = 14, -- cyan
+		[12] = 12, -- light blue
+		[13] = 13, -- pink
+		[14] = 8,  -- gray
+		[15] = 7  -- light gray
+	};
+
+	color_to_xterm(line)=> {
+		line = line:gsub("\003(%d%d?),(%d%d?)", \fg, bg-> {
+			local fg, bg = tonumber(fg), tonumber(bg);
+			if (&& @colors[fg] @colors[bg])
+				return table.concat({"\27[38;5;", @colors[fg], ";48;5;",
+					@colors[bg], "m"});
+		});
+		line = line:gsub("\003(%d%d?)", \fg-> {
+			local fg = tonumber(fg);
+			if @colors[fg]
+				return table.concat({"\27[38;5;", @colors[fg], "m"});
+		});
+		return (line:gsub("[\003\015]", "\27[0m"));
+	}
+
+	time_format = "\00311[\015%X\00311]\015";
+
+	log(fmt, ...)=> {
+		local t = (os.date(@time_format)):gsub(":", "\00308:\015");
+		print(@color_to_xterm(("%s %s\015"):format(t, fmt:format(...))));
+	}
 }
 
 return {ConfigurationError = ConfigurationError, IRCClient = IRCClient};
