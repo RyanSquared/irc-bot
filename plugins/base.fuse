@@ -219,14 +219,14 @@ IRCClient:add_handler('KICK', \line=> {
 
 IRCClient:add_handler('PART', \line=> {
 	local channel = line[1];
-	local nick = prefix_pattern:match(line.prefix);
+	local {nick} = prefix_pattern:match(line.prefix);
 	@users[nick].channels[channel] = nil;
 	if (== (# @users[nick].channels) 0)
 		@users[nick] = nil; -- TODO: look at again when MONITOR
 });
 
 IRCClient:add_handler('QUIT', \line=> {
-	local nick = prefix_pattern:match(line.prefix);
+	local {nick} = prefix_pattern:match(line.prefix);
 	for (channel in pairs(@users[nick].channels))
 		@channels[channel].users[nick] = nil;
 	@users[nick] = nil;
