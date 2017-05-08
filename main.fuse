@@ -6,6 +6,8 @@ local lfs = require("lfs");
 
 local wd = lfs.currentdir();
 
+os.execute("stty -echo");
+
 async lfs.full_dir(folder)-> {
 	for (path in lfs.dir(folder))
 		yield ("%s/%s"):format(folder, path);
@@ -30,16 +32,17 @@ local conf_home = (|| os.getenv('XDG_CONFIG_HOME')
 
 for (file in lfs.full_dir((.. conf_home "/irc-bot")))
 	if file:match("%.lua$") {
-		local data = nil;
 		(loadfile(file, nil, {
 			bot = (\name ->
 				(\file_data-> {
 					file_data.name = name;
 					file_data.file = file;
-					data = file_data;
+					print((.. "Adding new bot: " name));
+					table.insert(bots,
+							IRCClient(file_data.server, file_data.port,
+							file_data));
 				}))
 		}))();
-		table.insert(bots, IRCClient(data.server, data.port, data));
 	}
 
 local queue = cqueues.new();
