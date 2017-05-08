@@ -36,7 +36,7 @@ local prefix_pattern = re.compile([[ {|
 |}]]);
 
 IRCClient:add_handler('372', \line=>
-	@log("\00305%s", line[(#line)]); -- MOTD
+	@log("\00305%s", line[(#line)]) -- MOTD
 );
 
 IRCClient:add_handler('JOIN', \line=> {

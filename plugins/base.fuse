@@ -16,17 +16,17 @@ IRCClient:add_hook('CONNECT', \=> {
 });
 
 -- Autojoin channels on connect to server
-IRCClient:add_handler('001', \=>
+IRCClient:add_handler('001', \=> {
 	if @config.autojoin
 		for (_, channel in pairs(@config.autojoin)) {
 			@send_raw("JOIN %s", channel);
 			sleep(0.5); -- to avoid disconnect by flooding
 		}
-);
+});
 
 -- Respond to PING requests to stay alive when idle
 IRCClient:add_handler('PING', \line=>
-	@send_raw("PONG :%s", line[(# line)]);
+	@send_raw("PONG :%s", line[(# line)])
 );
 
 -- Reconnect when killed by server
@@ -138,7 +138,7 @@ IRCClient:add_handler('NICK', \line=> {
 	@users[old] = nil;
 });
 
-IRCClient:add_handler('MODE', \line=>
+IRCClient:add_handler('MODE', \line=> {
 	if (@server.isupport_caps['PREFIX']) {
 		local modes = table.concat({"[", ((?: @server.isupport_caps.PREFIX
 			@server.isupport_caps.PREFIX:match("(%(.-%))") "+@")):gsub("%p",
@@ -147,15 +147,15 @@ IRCClient:add_handler('MODE', \line=>
 			@send_raw("NAMES %s", line[1]);
 	} elseif (&& line[1] line[1]:match("^#"))
 		@send_raw("NAMES %s", line[1]);
-);
+});
 
-IRCClient:add_handler('332', \line=>
+IRCClient:add_handler('332', \line=> {
 	@channels[line[2]].topic = line[3];
-);
+});
 
-IRCClient:add_handler('TOPIC', \line=>
+IRCClient:add_handler('TOPIC', \line=> {
 	@channels[line[1]].topic = line[2];
-);
+});
 
 IRCClient:add_handler('353', \line=> {
 	local channel = line[3];
