@@ -16,7 +16,7 @@ async lfs.full_dir(folder)-> {
 local load_modules(folder)->
 	for (file in lfs.full_dir(folder))
 		if file:match("%.fuse$")
-			parser.do_file(file);
+			compiler.do_file(file);
 
 local reload(clean = true)-> {
 	if clean
