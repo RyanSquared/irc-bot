@@ -2,7 +2,7 @@ using *;
 local socket = require("cqueues.socket");
 local {Error} = require("stdlib.error");
 
-local gen_index = (\x -> return setmetatable({}, {__index = x}););
+local gen_index = (\x -> setmetatable({}, {__index = x}));
 local clean_table = \table-> {
 	for (k, v in pairs(table))
 		table[k] = nil;
@@ -153,13 +153,12 @@ local class IRCClient {
 		arg <- ':' {.+} / {%S+}
 
 		sp <- %s
-	]], {esc_tag = (\tag -> return tag:sub('\\(.)', setmetatable({
+	]], {esc_tag = \tag -> tag:sub('\\(.)', setmetatable({
 		[':'] = ';',
 		['s'] = ' ',
-		['\\'] = '\\',
 		['r'] = '\r',
 		['n'] = '\n'
-	}, {__index = \t, k -> k}));)}); -- __index required by spec
+	}, {__index = \t, k -> k}))}); -- __index required by spec
 
 	fire_hook(name)=> {
 		if (! @hooks[name])
