@@ -1,0 +1,93 @@
+using *;
+local {IRCClient} = require("lib.irc");
+local {sleep} = require("cqueues");
+
+local epoch = os.time({year=2014,day=0,month=0});
+-- equation: x + y = 2016*365+182; x + z = 2024*365; z = y * 4
+-- this assumes 4x rate past normal time
+-- attempts to use 3x rate could not provide accurate results following timestamps
+
+-- `year` can be the current year, `day` must be one below the current (so that day=0 is the 1st), month must be one
+-- below the current (so that month=0 is January).
+
+conv(t)-> {
+	local time = os.time(t);
+	local seconds_since_epoch = (- time epoch);
+	return (+ (* seconds_since_epoch 4) epoch);
+}
+
+cur(format)->
+	return os.date(format, conv(os.date('*t')));
+
+local (snips);
+snips = {
+	["map"] = {
+		desc = "Region Map",
+		text = "Region Map: http://greaterixnay.com/data/Map.png"
+	},
+	["rawmap"] = {
+		desc = "Labeless map",
+		text = "Raw Nations Map: http://greaterixnay.com/data/Raw_Map.png"
+	},
+	["rules"] = {
+		desc = "Golden Bull",
+		text = "Our Rules: http://greaterixnay.com/data/GoldenBull.pdf"
+	},
+	["feed"] = {
+		desc = "Ixnet Feed",
+		text = "IxFeed: https://www.greaterixnay.com/feed"
+	},
+	["rss"] = {
+		desc = "Ixnet RSS Feed",
+		text = "IxRSS: https://www.greaterixnay.com/forums/ixnay-central-news.25/index.rss"
+	},
+	["time"] = {
+		desc = "Show the current in-character time",
+		text = setmetatable({}, {__tostring=cur})
+	},
+	["help"] = {
+		desc = "Show help for commands",
+		text = setmetatable({}, {__tostring=\-> {
+			local out = {};
+			for (k, v in pairs(snips))
+				table.insert(out, ("'?%s': %s"):format(k, v.desc));
+			return table.concat(out, " | ");
+		}})
+	}
+};
+
+local pattern = /'?' {.+}/;
+
+IRCClient:add_handler('PRIVMSG', \line=> {
+	local cmd = pattern:match(line[2]);
+	if (&& snips[cmd] (== line[1]:lower() "#ixnay"))
+		@send_raw("PRIVMSG %s :%s", line[1], tostring(snips[cmd].text));
+});
+
+IRCClient:add_hook('CONNECT', \line=> {
+	@counter = (+ (|| @counter 0) 1);
+	local queue = require("queue");
+	queue:wrap(\-> {
+		local counter = @counter;
+		while (== counter @counter) {
+			sleep(60);
+			@send_raw("TOPIC #ixnay");
+		}
+	});
+});
+
+IRCClient:add_handler('TOPIC', \line=> {
+	local topic = line[2];
+	local fmt = topic:gsub('IC Date: ([^|]+)', '%%s');
+	local date = fmt:format(("IC Date: %s "):format(cur("%B %Y")));
+	if (!= date topic)
+		@send_raw("PRIVMSG ChanServ :topic %s %s", line[1], date);
+});
+
+IRCClient:add_handler('332', \line=> {
+	local topic = line[(#line)];
+	local fmt = topic:gsub('IC Date: ([^|]+)', '%%s');
+	local date = fmt:format(("IC Date: %s "):format(cur("%B %Y")));
+	if (!= date topic)
+		@send_raw("PRIVMSG ChanServ :topic %s %s", line[2], date);
+});
