@@ -138,7 +138,7 @@ local class IRCClient {
 		};
 	}
 
-	line_parser = re.compile([[
+	line_parser = re.compile([[ -- LPEG-RE
 		line <- {| (tags sp)? (prefix sp)? {command / numeric} (sp arg)* |}
 
 		tags <- {:tags: '@' tag (';' tag)* :}
