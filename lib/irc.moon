@@ -1,5 +1,6 @@
 socket = require "cqueues.socket"
 re = require "re"
+moonscript = require "moonscript"
 
 gen_index = (x)-> setmetatable {}, __index: x
 clean_table = (tbl)-> tbl[k] = nil for k in pairs tbl
@@ -133,8 +134,9 @@ class IRCClient
 		return if not @hooks[name]
 		errors = {}
 		for hook in *@hooks[name]
-			ok, err = pcall hook, self
-			table.insert errors, err if not ok
+			ok, err = moonscript.errors.trace_pcall hook, self
+			if not ok
+				table.insert errors, err
 		for err in *errors
 			print err
 	
@@ -144,8 +146,11 @@ class IRCClient
 		command = table.remove data, 1
 		if @handlers[command]
 			for handler in *@handlers[command]
-				ok, err = pcall handler, self, data
-				table.insert errors, err if not ok
+				ok, err = moonscript.errors.trace_pcall handler, self, data
+				if not ok
+					table.insert errors, err
+		if next errors
+			print "errors in process():"
 		for err in *errors
 			print err
 	

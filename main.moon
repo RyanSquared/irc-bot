@@ -1,4 +1,11 @@
 moonscript = require "moonscript.base"
+moonscript.errors = require "moonscript.errors"
+
+trace_in_xpcall = (err)->
+	return moonscript.errors.rewrite_traceback debug.traceback(nil, 3), err
+
+moonscript.errors.trace_pcall = (fn, ...)->
+	return xpcall(fn, trace_in_xpcall, ...)
 
 cqueues = require "cqueues"
 lfs = require "lfs"
@@ -28,7 +35,7 @@ conf_home = os.getenv('XDG_CONFIG_HOME') or os.getenv('HOME') .. '/.config'
 
 for file in lfs.full_dir conf_home .. "/irc-bot"
 	if file\match "%.lua$"
-		assert pcall loadfile file, nil,
+		file_func = loadfile file, nil,
 			bot: (name) ->
 				(file_data) ->
 					file_data.name = name
@@ -36,6 +43,7 @@ for file in lfs.full_dir conf_home .. "/irc-bot"
 					print "Adding new bot: #{name}"
 					table.insert bots, IRCClient(file_data.server,
 						file_data.port, file_data)
+		file_func!
 
 queue = cqueues.new!
 package.loaded.queue = queue
@@ -46,10 +54,13 @@ for bot in *bots
 		while true
 			local success, err
 			for i=1, 3
-				success, err = pcall bot.connect, bot
+				success, err = moonscript.errors.trace_pcall bot.connect, bot
 				break if success
 			if not success
 				error("Bot #{bot.config.name} can't connect: #{err}")
-			bot\loop!
+			ok, err = moonscript.errors.trace_pcall bot.loop, bot
+			if not ok
+				print "error in bot"
+				print err
 
 assert queue\loop!

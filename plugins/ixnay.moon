@@ -29,7 +29,7 @@ snips =
 		text: "IxRSS: https://www.greaterixnay.com/forums/ixnay-central-news.25/index.rss"
 	time:
 		desc: "Show the current in-character date/time"
-		text: setmetatable {}, __tostring: cur
+		text: setmetatable {}, __tostring: -> cur!
 	help:
 		desc: "Show help for commands"
 		text: setmetatable {}, __tostring: ->
@@ -37,6 +37,9 @@ snips =
 			for k, v in pairs snips
 				table.insert out, "'?#{k}': #{v.desc}"
 			return table.concat out, " | "
+	fail:
+		desc: "Purposefully error"
+		text: setmetatable {}, __tostring: -> error "test"
 
 command_pattern = re.compile "'?' {.+}"
 
