@@ -85,6 +85,7 @@ class IRCClient
 		@fire_hook "CONNECT"
 		{:nick, :username, :realname, :password} = @config
 		@send_raw "NICK %s", nick
+		@nick = nick
 		@send_raw "PASS :%s", password if password and ssl
 		error "Must use TLS with passwords" if password and not ssl
 		@send_raw "USER %s * * :%s", username, realname
@@ -115,7 +116,7 @@ class IRCClient
 			{:nick: {[^ !]+} :} '!'
 			{:user: {[^ @]+} :} '@'
 			{:host: {[^ ]+} :} /
-			{:server: {[^ ]+} :})
+			{:nick: {[^ ]+} :})
 
 		command <- [A-Za-z]+
 		numeric <- %d^+3^-4 -- at most four digits, at least three
@@ -150,9 +151,10 @@ class IRCClient
 				if not ok
 					table.insert errors, err
 		if next errors
-			print "errors in process():"
+			@log ("\00304errors in process(%q):")\format line
 		for err in *errors
-			print err
+			for line in err\gmatch "[^\r\n]+"
+				@log "\00304#{line}"
 	
 	loop: =>
 		for line in @socket\lines!
@@ -189,7 +191,7 @@ class IRCClient
 
 	log: (fmt, ...)=>
 		time = os.date(time_format)\gsub ":", "\00308:\015"
-		print color_to_xterm "#{time} #{fmt\format ...}\015"
+		print color_to_xterm "#{time} #{string.format fmt, ...}\015"
 	
 	debug: (fmt, ...)=>
 		@log fmt, ...  if @config.debug
