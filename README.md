@@ -1,5 +1,5 @@
 # irc-bot
-IRC bot in FusionScript
+IRC bot in MoonScript
 
 ## Configuration - in Lua
 
