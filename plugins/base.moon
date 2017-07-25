@@ -34,6 +34,7 @@ IRCClient\add_handler '443', (line)=>
 	if @data.nick_test > 30
 		@disconnect!
 	else
+		@nick = "#{@config.nick}[#{@data.nick_test}]"
 		@send_raw "NICK %s[%s]", @config.nick, @data.nick_test
 
 -- [==] Capability Negotiation ::TODO:: [==]
@@ -96,14 +97,17 @@ IRCClient\add_handler 'JOIN', (line)=>
 		@channels[channel].users[nick] = @users[nick]
 
 IRCClient\add_handler 'NICK', (line)=>
-	{:nick, :server} = line
-	old = nick or server
+	{:nick} = line
+	old = nick
 	new = line[#line]
 	for channel_name in pairs @users[old].channels
 		@channels[channel_name].users[new] = @users[old]
 		@channels[channel_name].users[old] = nil
 	@users[new] = @users[old]
 	@users[old] = nil
+
+	if old == @nick
+		@nick = new
 
 IRCClient\add_handler 'MODE', (line)=>
 	local modes
