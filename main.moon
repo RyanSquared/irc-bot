@@ -2,10 +2,11 @@ moonscript = require "moonscript.base"
 moonscript.errors = require "moonscript.errors"
 
 trace_in_xpcall = (err)->
-	return moonscript.errors.rewrite_traceback debug.traceback(nil, 3), err
+	return moonscript.errors.rewrite_traceback debug.traceback!, err
 
 moonscript.errors.trace_pcall = (fn, ...)->
 	return xpcall(fn, trace_in_xpcall, ...)
+
 
 cqueues = require "cqueues"
 lfs = require "lfs"
