@@ -154,7 +154,7 @@ class IRCClient
 			@log ("\00304errors in process(%q):")\format line
 		for err in *errors
 			for line in err\gmatch "[^\r\n]+"
-				@log "\00304#{line}"
+				@log "\00304%s", line
 	
 	loop: =>
 		for line in @socket\lines!
