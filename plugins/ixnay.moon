@@ -62,22 +62,24 @@ IRCClient\add_hook 'CONNECT', (line)=>
 			sleep 60
 			@send_raw "TOPIC #Ixnay"
 
+escape = (text)-> text\gsub "[%[%]()%%%-+?*]", "%%%1"
+
 IRCClient\add_handler 'TOPIC', (line)=>
 	return if not @config.ixnay
 	channel = line[1]
 	return if channel\lower! != "#ixnay"
 	topic = line[2]
-	fmt = topic\gsub("%p", "%%%1")\gsub "IC Date: [^|]+", "IC Date: %%s"
+	fmt = escape(topic)\gsub "IC Date: [^|]+", "IC Date: %%s"
 	date = fmt\format cur "%B %Y"
 	if topic != date
 		@send_raw "PRIVMSG ChanServ :TOPIC %s %s",  channel, date
 
 IRCClient\add_handler '332', (line)=>
 	return if not @config.ixnay
-	channel = line[1]
+	channel = line[2]
 	return if channel\lower! != "#ixnay"
 	topic = line[#line]
-	fmt = topic\gsub("%p", "%%%1")\gsub "IC Date: [^|]+", "IC Date: %%s"
+	fmt = escape(topic)\gsub "IC Date: [^|]+", "IC Date: %%s"
 	date = fmt\format cur "%B %Y"
 	if topic != date
 		@send_raw "PRIVMSG ChanServ :TOPIC %s %s",  channel, date
