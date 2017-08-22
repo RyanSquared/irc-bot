@@ -124,7 +124,7 @@ class IRCClient
 		arg <- ':' {.+} / {%S+}
 
 		sp <- %s
-	]], esc_tag: (tag)-> tag\sub "\\(.)", setmetatable({
+	]], esc_tag: (tag)-> tag\gsub "\\(.)", setmetatable({
 		[":"]: ":"
 		s: " "
 		r: "\r"
