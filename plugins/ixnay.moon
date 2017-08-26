@@ -69,7 +69,7 @@ IRCClient\add_handler 'TOPIC', (line)=>
 	channel = line[1]
 	return if channel\lower! != "#ixnay"
 	topic = line[2]
-	fmt = escape(topic)\gsub "IC Date: [^|]+", "IC Date: %%s"
+	fmt = escape(topic)\gsub "IC Date: [^|]+", "IC Date: %%s "
 	date = fmt\format cur "%B %Y"
 	if topic != date
 		@send_raw "PRIVMSG ChanServ :TOPIC %s %s",  channel, date
@@ -79,7 +79,7 @@ IRCClient\add_handler '332', (line)=>
 	channel = line[2]
 	return if channel\lower! != "#ixnay"
 	topic = line[#line]
-	fmt = escape(topic)\gsub "IC Date: [^|]+", "IC Date: %%s"
+	fmt = escape(topic)\gsub "IC Date: [^|]+", "IC Date: %%s "
 	date = fmt\format cur "%B %Y"
 	if topic != date
 		@send_raw "PRIVMSG ChanServ :TOPIC %s %s",  channel, date
